@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YouTube 字幕同步播放器 - 懒加载版</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+    
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      overflow: hidden;
+    }
+    
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 30px;
+      text-align: center;
+    }
+    
+    .header h1 {
+      font-size: 28px;
+      margin-bottom: 10px;
+    }
+    
+    .header .subtitle {
+      opacity: 0.9;
+      font-size: 14px;
+    }
+    
+    .performance-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-left: 8px;
+    }
+    
+    .controls {
+      padding: 30px;
+      background: #f8f9fa;
+      border-bottom: 2px solid #e9ecef;
+    }
+    
+    .input-group {
+      margin-bottom: 20px;
+    }
+    
+    .input-group label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: #495057;
+    }
+    
+    .input-group input[type="text"] {
+      width: 100%;
+      padding: 12px 16px;
+      border: 2px solid #dee2e6;
+      border-radius: 8px;
+      font-size: 14px;
+      transition: border-color 0.3s;
+    }
+    
+    .input-group input[type="text"]:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+    
+    .file-input-wrapper {
+      position: relative;
+      display: inline-block;
+      width: 100%;
+    }
+    
+    .file-input-wrapper input[type="file"] {
+      position: absolute;
+      opacity: 0;
+      width: 100%;
+      height: 100%;
+      cursor: pointer;
+    }
+    
+    .file-input-label {
+      display: block;
+      padding: 12px 16px;
+      background: white;
+      border: 2px dashed #dee2e6;
+      border-radius: 8px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    
+    .file-input-label:hover {
+      border-color: #667eea;
+      background: #f8f9ff;
+    }
+    
+    .file-input-label.has-file {
+      border-color: #28a745;
+      background: #d4edda;
+      color: #155724;
+    }
+    
+    .btn {
+      padding: 12px 24px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      width: 100%;
+    }
+    
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+    
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    .content {
+      display: flex;
+      gap: 20px;
+      padding: 30px;
+    }
+    
+    .video-section {
+      flex: 1;
+    }
+    
+    .video-wrapper {
+      position: relative;
+      padding-bottom: 56.25%;
+      height: 0;
+      overflow: hidden;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    
+    .video-wrapper iframe {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+    
+    .subtitle-section {
+      flex: 0 0 400px;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .subtitle-header {
+      padding: 15px;
+      background: #f8f9fa;
+      border-radius: 8px 8px 0 0;
+      font-weight: 600;
+      color: #495057;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    
+    .subtitle-stats {
+      font-size: 11px;
+      color: #6c757d;
+      font-weight: normal;
+    }
+    
+    .dom-count {
+      color: #28a745;
+      font-weight: 600;
+    }
+    
+    .subtitle-list {
+      flex: 1;
+      max-height: 500px;
+      overflow-y: auto;
+      border: 2px solid #e9ecef;
+      border-radius: 0 0 8px 8px;
+      background: white;
+    }
+    
+    .subtitle-item {
+      padding: 15px;
+      border-bottom: 1px solid #e9ecef;
+      cursor: pointer;
+      transition: background 0.2s;
+      user-select: text;
+    }
+    
+    .subtitle-item:hover {
+      background: #f8f9fa;
+    }
+    
+    .subtitle-item.active {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      font-weight: 500;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    
+    .subtitle-time {
+      font-size: 12px;
+      color: #6c757d;
+      margin-bottom: 5px;
+    }
+    
+    .subtitle-item.active .subtitle-time {
+      color: rgba(255,255,255,0.8);
+    }
+    
+    .subtitle-text {
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    
+    .load-more-btn {
+      padding: 12px;
+      text-align: center;
+      background: #f8f9fa;
+      color: #667eea;
+      cursor: pointer;
+      border-bottom: 1px solid #e9ecef;
+      font-weight: 500;
+      transition: all 0.2s;
+      user-select: none;
+    }
+    
+    .load-more-btn:hover {
+      background: #e7f1ff;
+    }
+    
+    .load-more-btn.loading {
+      color: #6c757d;
+      cursor: wait;
+    }
+    
+    .empty-state {
+      padding: 60px 20px;
+      text-align: center;
+      color: #6c757d;
+    }
+    
+    .empty-state svg {
+      width: 80px;
+      height: 80px;
+      margin-bottom: 20px;
+      opacity: 0.3;
+    }
+    
+    /* 滚动条样式 */
+    .subtitle-list::-webkit-scrollbar {
+      width: 8px;
+    }
+    
+    .subtitle-list::-webkit-scrollbar-track {
+      background: #f1f1f1;
+    }
+    
+    .subtitle-list::-webkit-scrollbar-thumb {
+      background: #888;
+      border-radius: 4px;
+    }
+    
+    .subtitle-list::-webkit-scrollbar-thumb:hover {
+      background: #555;
+    }
+    
+    /* 平板适配 (768px - 1024px) */
+    @media (max-width: 1024px) {
+      body {
+        padding: 10px;
+      }
+      
+      .header h1 {
+        font-size: 22px;
+      }
+      
+      .header .subtitle {
+        font-size: 13px;
+      }
+      
+      .performance-badge {
+        font-size: 10px;
+        padding: 3px 8px;
+      }
+      
+      .controls {
+        padding: 20px;
+      }
+      
+      .content {
+        flex-direction: column;
+        padding: 20px;
+        gap: 20px;
+      }
+      
+      .subtitle-section {
+        flex: 1;
+        max-width: 100%;
+      }
+      
+      .subtitle-list {
+        max-height: 400px;
+      }
+    }
+    
+    /* 手机适配 (< 768px) */
+    @media (max-width: 768px) {
+      body {
+        padding: 5px;
+      }
+      
+      .container {
+        border-radius: 8px;
+      }
+      
+      .header {
+        padding: 20px 15px;
+      }
+      
+      .header h1 {
+        font-size: 18px;
+        margin-bottom: 8px;
+      }
+      
+      .header .subtitle {
+        font-size: 12px;
+      }
+      
+      .performance-badge {
+        display: block;
+        margin: 8px auto 0;
+        width: fit-content;
+      }
+      
+      .controls {
+        padding: 15px;
+      }
+      
+      .input-group {
+        margin-bottom: 15px;
+      }
+      
+      .input-group label {
+        font-size: 13px;
+      }
+      
+      .input-group input[type="text"] {
+        padding: 10px 12px;
+        font-size: 13px;
+      }
+      
+      .file-input-label {
+        padding: 10px 12px;
+        font-size: 13px;
+      }
+      
+      .btn {
+        padding: 10px 20px;
+        font-size: 14px;
+      }
+      
+      .content {
+        padding: 15px;
+        gap: 15px;
+      }
+      
+      .subtitle-header {
+        padding: 12px;
+        font-size: 14px;
+      }
+      
+      .subtitle-stats {
+        font-size: 10px;
+        width: 100%;
+        text-align: center;
+        margin-top: 4px;
+      }
+      
+      .subtitle-list {
+        max-height: 300px;
+      }
+      
+      .subtitle-item {
+        padding: 12px;
+      }
+      
+      .subtitle-time {
+        font-size: 11px;
+      }
+      
+      .subtitle-text {
+        font-size: 13px;
+        line-height: 1.5;
+      }
+      
+      .load-more-btn {
+        padding: 10px;
+        font-size: 13px;
+      }
+      
+      .empty-state {
+        padding: 40px 15px;
+      }
+      
+      .empty-state svg {
+        width: 60px;
+        height: 60px;
+      }
+    }
+    
+    /* 超小屏幕适配 (< 480px) */
+    @media (max-width: 480px) {
+      .header h1 {
+        font-size: 16px;
+      }
+      
+      .header .subtitle {
+        font-size: 11px;
+      }
+      
+      .input-group input[type="text"] {
+        font-size: 12px;
+      }
+      
+      .subtitle-list {
+        max-height: 250px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🎬 YouTube 字幕同步播放器</h1>
+      <p class="subtitle">
+        导入视频和字幕，享受同步播放体验
+        <span class="performance-badge">⚡ 懒加载优化</span>
+      </p>
+    </div>
+    
+    <div class="controls">
+      <div class="input-group">
+        <label for="youtube-url">YouTube 视频链接</label>
+        <input 
+          type="text" 
+          id="youtube-url" 
+          placeholder="粘贴 YouTube 视频链接，例如: https://www.youtube.com/watch?v=xxxxx"
+        >
+      </div>
+      
+      <div class="input-group">
+        <label for="subtitle-file">字幕文件 (SRT 格式)</label>
+        <div class="file-input-wrapper">
+          <input 
+            type="file" 
+            id="subtitle-file" 
+            accept=".srt"
+          >
+          <div class="file-input-label" id="file-label">
+            📁 点击选择字幕文件或拖拽到此处
+          </div>
+        </div>
+      </div>
+      
+      <button class="btn" id="load-btn">加载视频和字幕</button>
+    </div>
+    
+    <div class="content">
+      <div class="video-section">
+        <div class="video-wrapper" id="video-container">
+          <div class="empty-state">
+            <svg fill="currentColor" viewBox="0 0 20 20">
+              <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z"/>
+            </svg>
+            <p>请输入 YouTube 链接并加载视频</p>
+          </div>
+        </div>
+      </div>
+      
+      <div class="subtitle-section">
+        <div class="subtitle-header">
+          <span>📝 字幕列表</span>
+          <span class="subtitle-stats" id="subtitle-stats"></span>
+        </div>
+        <div class="subtitle-list" id="subtitle-list">
+          <div class="empty-state">
+            <svg fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clip-rule="evenodd"/>
+            </svg>
+            <p>请上传字幕文件</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <script src="https://www.youtube.com/iframe_api"></script>
+  <script>
+    let player;
+    let subtitles = [];
+    let currentSubtitleIndex = -1;
+    let updateInterval;
+    
+    // 懒加载配置
+    const BATCH_SIZE = 50;
+    let loadedCount = 0;
+    let isLoading = false;
+    
+    function onYouTubeIframeAPIReady() {
+      console.log('YouTube API Ready');
+    }
+    
+    function parseSRT(srtContent) {
+      const subtitles = [];
+      const blocks = srtContent.trim().split(/\n\s*\n/);
+      
+      blocks.forEach(block => {
+        const lines = block.split('\n');
+        if (lines.length >= 3) {
+          const timeMatch = lines[1].match(/(\d{2}):(\d{2}):(\d{2}),(\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2}),(\d{3})/);
+          if (timeMatch) {
+            const startTime = parseInt(timeMatch[1]) * 3600 + parseInt(timeMatch[2]) * 60 + parseInt(timeMatch[3]) + parseInt(timeMatch[4]) / 1000;
+            const endTime = parseInt(timeMatch[5]) * 3600 + parseInt(timeMatch[6]) * 60 + parseInt(timeMatch[7]) + parseInt(timeMatch[8]) / 1000;
+            const text = lines.slice(2).join('\n');
+            
+            subtitles.push({
+              start: startTime,
+              end: endTime,
+              text: text
+            });
+          }
+        }
+      });
+      
+      return subtitles;
+    }
+    
+    function formatTime(seconds) {
+      const h = Math.floor(seconds / 3600);
+      const m = Math.floor((seconds % 3600) / 60);
+      const s = Math.floor(seconds % 60);
+      
+      if (h > 0) {
+        return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+      }
+      return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    }
+    
+    function createSubtitleItem(subtitle, index) {
+      const item = document.createElement('div');
+      item.className = 'subtitle-item';
+      item.dataset.index = index;
+      
+      const time = document.createElement('div');
+      time.className = 'subtitle-time';
+      time.textContent = `${formatTime(subtitle.start)} → ${formatTime(subtitle.end)}`;
+      
+      const text = document.createElement('div');
+      text.className = 'subtitle-text';
+      text.textContent = subtitle.text;
+      
+      item.appendChild(time);
+      item.appendChild(text);
+      
+      item.addEventListener('click', (e) => {
+        if (window.getSelection().toString()) return;
+        if (player && player.seekTo) {
+          player.seekTo(subtitle.start, true);
+          player.playVideo();
+        }
+      });
+      
+      return item;
+    }
+    
+    function loadMoreSubtitles() {
+      if (isLoading || loadedCount >= subtitles.length) return;
+      
+      isLoading = true;
+      const listContainer = document.getElementById('subtitle-list');
+      const loadMoreBtn = listContainer.querySelector('.load-more-btn');
+      if (loadMoreBtn) loadMoreBtn.remove();
+      
+      const fragment = document.createDocumentFragment();
+      const endIndex = Math.min(loadedCount + BATCH_SIZE, subtitles.length);
+      
+      for (let i = loadedCount; i < endIndex; i++) {
+        fragment.appendChild(createSubtitleItem(subtitles[i], i));
+      }
+      
+      listContainer.appendChild(fragment);
+      loadedCount = endIndex;
+      
+      if (loadedCount < subtitles.length) {
+        const loadMoreBtn = document.createElement('div');
+        loadMoreBtn.className = 'load-more-btn';
+        loadMoreBtn.textContent = `📥 加载更多 (还有 ${subtitles.length - loadedCount} 条)`;
+        loadMoreBtn.addEventListener('click', loadMoreSubtitles);
+        listContainer.appendChild(loadMoreBtn);
+      }
+      
+      updateSubtitleStats();
+      isLoading = false;
+    }
+    
+    function updateSubtitleStats() {
+      const statsEl = document.getElementById('subtitle-stats');
+      const totalDuration = subtitles.length > 0 ? subtitles[subtitles.length - 1].end : 0;
+      statsEl.innerHTML = `总计 ${subtitles.length} 条 | <span class="dom-count">已加载 ${loadedCount}</span> | ${formatTime(totalDuration)}`;
+    }
+    
+    function initSubtitles() {
+      const listContainer = document.getElementById('subtitle-list');
+      listContainer.innerHTML = '';
+      loadedCount = 0;
+      loadMoreSubtitles();
+    }
+    
+    function updateCurrentSubtitle() {
+      if (!player || !player.getCurrentTime) return;
+      
+      const currentTime = player.getCurrentTime();
+      let foundIndex = -1;
+      
+      for (let i = 0; i < subtitles.length; i++) {
+        if (currentTime >= subtitles[i].start && currentTime <= subtitles[i].end) {
+          foundIndex = i;
+          break;
+        }
+      }
+      
+      if (foundIndex !== currentSubtitleIndex) {
+        if (currentSubtitleIndex >= 0) {
+          const oldItem = document.querySelector(`.subtitle-item[data-index="${currentSubtitleIndex}"]`);
+          if (oldItem) oldItem.classList.remove('active');
+        }
+        
+        if (foundIndex >= 0) {
+          while (loadedCount <= foundIndex && loadedCount < subtitles.length) {
+            loadMoreSubtitles();
+          }
+          
+          const newItem = document.querySelector(`.subtitle-item[data-index="${foundIndex}"]`);
+          if (newItem) {
+            newItem.classList.add('active');
+            newItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }
+        
+        currentSubtitleIndex = foundIndex;
+      }
+    }
+    
+    function extractVideoId(url) {
+      const patterns = [
+        /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/,
+        /youtube\.com\/embed\/([^&\n?#]+)/,
+        /youtube\.com\/v\/([^&\n?#]+)/
+      ];
+      
+      for (const pattern of patterns) {
+        const match = url.match(pattern);
+        if (match) return match[1];
+      }
+      return null;
+    }
+    
+    document.getElementById('subtitle-file').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        document.getElementById('file-label').textContent = `✅ ${file.name}`;
+        document.getElementById('file-label').classList.add('has-file');
+      }
+    });
+    
+    document.getElementById('load-btn').addEventListener('click', async () => {
+      const youtubeUrl = document.getElementById('youtube-url').value.trim();
+      const subtitleFile = document.getElementById('subtitle-file').files[0];
+      
+      if (!youtubeUrl) {
+        alert('请输入 YouTube 视频链接');
+        return;
+      }
+      
+      const videoId = extractVideoId(youtubeUrl);
+      if (!videoId) {
+        alert('无效的 YouTube 链接');
+        return;
+      }
+      
+      const videoContainer = document.getElementById('video-container');
+      videoContainer.innerHTML = '';
+      
+      const iframe = document.createElement('iframe');
+      iframe.src = `https://www.youtube.com/embed/${videoId}?enablejsapi=1`;
+      iframe.frameBorder = '0';
+      iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+      iframe.allowFullscreen = true;
+      videoContainer.appendChild(iframe);
+      
+      player = new YT.Player(iframe, {
+        events: {
+          'onReady': () => {
+            updateInterval = setInterval(updateCurrentSubtitle, 100);
+          }
+        }
+      });
+      
+      if (subtitleFile) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          subtitles = parseSRT(e.target.result);
+          initSubtitles();
+        };
+        reader.readAsText(subtitleFile);
+      }
+    });
+    
+    document.getElementById('subtitle-list').addEventListener('scroll', (e) => {
+      const element = e.target;
+      if (element.scrollHeight - element.scrollTop - element.clientHeight < 100) {
+        loadMoreSubtitles();
+      }
+    });
+  </script>
+</body>
+</html>
